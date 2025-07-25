@@ -65,7 +65,7 @@ def predict_species(iris_features: IrisRequest):
             iris_features.sepal_width,
             iris_features.petal_length,
             iris_features.petal_width
-        ]], columns=['sepal.length', 'sepal.width', 'petal.length', 'petal.width'])
+        ]], columns=['sepal_length', 'sepal_width', 'petal_length', 'petal_width'])
         
         prediction = model.predict(data)
         probability = model.predict_proba(data).max()
