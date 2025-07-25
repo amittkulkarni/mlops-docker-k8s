@@ -9,7 +9,6 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GKE_CLUSTER: iris-cluster
   GKE_ZONE: us-central1-a
-  # --- NEW: Define Artifact Registry location and repository name ---
   GCP_REGION: us-central1
   IMAGE_REPO: iris-repo
   IMAGE_NAME: iris-api
@@ -35,22 +34,18 @@ jobs:
 
     - name: Install gke-gcloud-auth-plugin
       run: gcloud components install gke-gcloud-auth-plugin
-      
-    # --- UPDATED: Configure Docker for Artifact Registry ---
+
     - name: Configure Docker
       run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-    # --- UPDATED: Define the full image path for Artifact Registry ---
     - name: Define image path
       run: echo "IMAGE_PATH=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
 
-    # --- UPDATED: Build and push image to Artifact Registry ---
     - name: Build and Push Docker image
       run: |
         docker build . --tag "${{ env.IMAGE_PATH }}:${{ github.sha }}"
         docker push "${{ env.IMAGE_PATH }}:${{ github.sha }}"
 
-    # --- UPDATED: Deploy to GKE with the correct Artifact Registry image path ---
     - name: Deploy to GKE
       run: |
         gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
