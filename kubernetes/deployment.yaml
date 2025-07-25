@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   name: iris-api-deployment
 spec:
-  replicas: 2
+  replicas: 2 # Start with 2 replicas
   selector:
     matchLabels:
       app: iris-api
@@ -15,6 +15,13 @@ spec:
     spec:
       containers:
       - name: iris-api-container
-        image: gcr.io/trans-market-461117-g0/iris-api:latest
+        image: # This will be replaced by the CI/CD pipeline
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            cpu: "250m" # Request 0.25 of a CPU core
+            memory: "128Mi"
+          limits:
+            cpu: "500m" # Limit to 0.5 of a CPU core
+            memory: "256Mi"
