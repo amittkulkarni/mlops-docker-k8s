@@ -17,7 +17,6 @@ def train_model():
     X = df[features]
     y = df[target]
     
-    # Split the data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
     
     # Initialize and train the model
