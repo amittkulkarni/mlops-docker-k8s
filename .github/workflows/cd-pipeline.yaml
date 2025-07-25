@@ -1,59 +1,58 @@
 # .github/workflows/cd-pipeline.yaml
 name: Build and Deploy to GKE
 
-# This workflow runs on any push to the 'main' branch
 on:
   push:
     branches: [ "main" ]
 
 env:
-  # Set environment variables here. Use GitHub Secrets for sensitive data.
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GKE_CLUSTER: iris-cluster # Name of your GKE cluster
-  GKE_ZONE: us-central1-a # Zone of your GKE cluster
+  GKE_CLUSTER: iris-cluster
+  GKE_ZONE: us-central1-a
+  # --- NEW: Define Artifact Registry location and repository name ---
+  GCP_REGION: us-central1
+  IMAGE_REPO: iris-repo
   IMAGE_NAME: iris-api
-
+  
 jobs:
   setup-build-publish-deploy:
     name: Setup, Build, Publish, and Deploy
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'  
+      id-token: 'write'
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 1. Authenticate to Google Cloud
     - name: Authenticate to GCP
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    # 2. Setup gcloud CLI
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
-    # 3. Configure Docker to push to Google Container Registry (GCR)
+    # --- UPDATED: Configure Docker for Artifact Registry ---
     - name: Configure Docker
-      run: gcloud auth configure-docker gcr.io --quiet
+      run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-    # 4. Build and push Docker image
+    # --- UPDATED: Define the full image path for Artifact Registry ---
+    - name: Define image path
+      run: echo "IMAGE_PATH=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}" >> $GITHUB_ENV
+
+    # --- UPDATED: Build and push image to Artifact Registry ---
     - name: Build and Push Docker image
       run: |
-        # Build the image and tag it with the commit SHA
-        docker build . --tag "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}"
-        # Push the image to GCR
-        docker push "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}"
+        docker build . --tag "${{ env.IMAGE_PATH }}:${{ github.sha }}"
+        docker push "${{ env.IMAGE_PATH }}:${{ github.sha }}"
 
-    # 5. Deploy to Google Kubernetes Engine (GKE)
+    # --- UPDATED: Deploy to GKE with the correct Artifact Registry image path ---
     - name: Deploy to GKE
       run: |
-        # Get credentials for your GKE cluster
         gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
-
-        # Update the Kubernetes deployment file with the new image tag
-        sed -i "s|gcr.io/trans-market-461117-g0/iris-api:latest|gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}|" kubernetes/deployment.yaml
         
-        # Apply the updated Kubernetes manifests
+        # Note: This sed command now uses a different delimiter '|' to avoid conflict with the '/' in the image path
+        sed -i "s|image:.*|image: ${{ env.IMAGE_PATH }}:${{ github.sha }}|" kubernetes/deployment.yaml
+        
         kubectl apply -f kubernetes/
