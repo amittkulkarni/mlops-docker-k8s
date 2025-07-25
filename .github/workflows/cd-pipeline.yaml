@@ -1,0 +1,58 @@
+# .github/workflows/cd-pipeline.yaml
+name: Build and Deploy to GKE
+
+# This workflow runs on any push to the 'main' branch
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  # Set environment variables here. Use GitHub Secrets for sensitive data.
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: iris-cluster # Name of your GKE cluster
+  GKE_ZONE: us-central1-a # Zone of your GKE cluster
+  IMAGE_NAME: iris-api
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 1. Authenticate to Google Cloud
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+        service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+    # 2. Setup gcloud CLI
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    # 3. Configure Docker to push to Google Container Registry (GCR)
+    - name: Configure Docker
+      run: gcloud auth configure-docker gcr.io --quiet
+
+    # 4. Build and push Docker image
+    - name: Build and Push Docker image
+      run: |
+        # Build the image and tag it with the commit SHA
+        docker build . --tag "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}"
+        # Push the image to GCR
+        docker push "gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}"
+
+    # 5. Deploy to Google Kubernetes Engine (GKE)
+    - name: Deploy to GKE
+      run: |
+        # Get credentials for your GKE cluster
+        gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE
+
+        # Update the Kubernetes deployment file with the new image tag
+        sed -i "s|gcr.io/trans-market-461117-g0/iris-api:latest|gcr.io/${GCP_PROJECT_ID}/${IMAGE_NAME}:${{ github.sha }}|" kubernetes/deployment.yaml
+        
+        # Apply the updated Kubernetes manifests
+        kubectl apply -f kubernetes/
